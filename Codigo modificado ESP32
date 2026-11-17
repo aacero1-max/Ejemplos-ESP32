@@ -1,0 +1,92 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// Configuración de la pantalla LCD 16x2 en dirección 0x27 (pines SDA=21, SCL=22)
+LiquidCrystal_I2C LCD = LiquidCrystal_I2C(0x27, 16, 2);
+
+// Credenciales Wi-Fi de la simulación en Wokwi
+const char* ssid = "Wokwi-GUEST";
+const char* password = "";
+
+// URL del servicio HTTP (API pública que devuelve un consejo aleatorio en JSON)
+const char* serverName = "http://api.adviceslip.com/advice";
+
+void setup() {
+  Serial.begin(115200);
+
+  // Inicializar pantalla LCD
+  LCD.init();
+  LCD.backlight();
+  LCD.setCursor(0, 0);
+  LCD.print("Conectando WiFi");
+
+  // Iniciar conexión Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nConectado a la red WiFi!");
+  Serial.print("IP asignada: ");
+  Serial.println(WiFi.localIP());
+
+  LCD.clear();
+  LCD.setCursor(0, 0);
+  LCD.print("WiFi Conectado!");
+  LCD.setCursor(0, 1);
+  LCD.print(WiFi.localIP()); // Muestra la IP del ESP32 en el LCD
+  delay(2000);
+}
+
+void loop() {
+  // Comprobar que seguimos conectados antes de hacer la petición HTTP
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    LCD.clear();
+    LCD.setCursor(0, 0);
+    LCD.print("Peticion HTTP...");
+
+    // Iniciar la petición HTTP GET al servidor
+    http.begin(serverName);
+    int httpResponseCode = http.GET(); // Envía la petición y guarda el código de estado
+
+    if (httpResponseCode > 0) {
+      Serial.print("Codigo respuesta HTTP: ");
+      Serial.println(httpResponseCode); // 200 significa OK
+
+      // Obtener el cuerpo de la respuesta (payload)
+      String payload = http.getString();
+      Serial.println("Respuesta recibida:");
+      Serial.println(payload);
+
+      // Modificación propia: Mostrar el código HTTP y parte del mensaje en el LCD
+      LCD.clear();
+      LCD.setCursor(0, 0);
+      LCD.print("HTTP OK: ");
+      LCD.print(httpResponseCode);
+
+      // Extraemos el texto del consejo dentro del JSON para mostrarlo en la fila 2
+      int inicioTexto = payload.indexOf("\"advice\": \"") + 11;
+      int finTexto = payload.indexOf("\"}", inicioTexto);
+      String consejo = payload.substring(inicioTexto, finTexto);
+
+      LCD.setCursor(0, 1);
+      LCD.print(consejo.substring(0, 16)); // Muestra los primeros 16 caracteres
+    } else {
+      Serial.print("Error en la peticion HTTP: ");
+      Serial.println(httpResponseCode);
+      LCD.setCursor(0, 1);
+      LCD.print("Error HTTP");
+    }
+
+    // Liberar recursos de la conexión
+    http.end();
+  }
+
+  // Esperar 10 segundos antes de hacer una nueva consulta
+  delay(10000);
+}
