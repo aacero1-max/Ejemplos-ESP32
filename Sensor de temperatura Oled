@@ -1,0 +1,97 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <DHT.h>
+
+#define SCREEN_WIDTH 128 // Ancho de la pantalla OLED en píxeles[cite: 7]
+#define SCREEN_HEIGHT 64 // Alto de la pantalla OLED en píxeles[cite: 7]
+
+// Pines de los componentes
+#define PIN_DHT 15
+#define PIN_LED 2
+#define PIN_BOTON 4
+#define DHTTYPE DHT22
+
+Adafruit_SSD1306 oled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); //[cite: 7]
+DHT dht(PIN_DHT, DHTTYPE);
+
+bool usarFahrenheit = false;
+bool ultimoEstadoBoton = HIGH;
+
+void setup() {
+  Serial.begin(9600); //[cite: 7]
+  
+  pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_BOTON, INPUT_PULLUP);
+  dht.begin();
+
+  if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { //[cite: 7]
+    Serial.println(F("Error al iniciar SSD1306 OLED")); //[cite: 7]
+    while (1); //[cite: 7]
+  }
+
+  delay(1000); //[cite: 7]
+}
+
+void loop() {
+  // Leer botón para alternar entre °C y °F
+  bool estadoActualBoton = digitalRead(PIN_BOTON);
+  if (ultimoEstadoBoton == HIGH && estadoActualBoton == LOW) {
+    usarFahrenheit = !usarFahrenheit;
+    delay(200);
+  }
+  ultimoEstadoBoton = estadoActualBoton;
+
+  // Leer temperatura y humedad
+  float tempC = dht.readTemperature();
+  float hum = dht.readHumidity();
+
+  if (isnan(tempC) || isnan(hum)) {
+    Serial.println("Error leyendo el sensor DHT22");
+    return;
+  }
+
+  // Alerta visual: Si pasa de 30°C se enciende el LED rojo
+  if (tempC >= 30.0) {
+    digitalWrite(PIN_LED, HIGH);
+  } else {
+    digitalWrite(PIN_LED, LOW);
+  }
+
+  // Mostrar datos en la OLED
+  oled.clearDisplay(); //[cite: 7]
+  oled.setTextColor(WHITE); //[cite: 7]
+  
+  oled.setTextSize(1); //[cite: 7]
+  oled.setCursor(0, 0); //[cite: 7]
+  oled.println("ESTACION METEO IoT");
+  oled.drawLine(0, 10, 128, 10, WHITE);
+
+  // Temperatura
+  oled.setTextSize(2);
+  oled.setCursor(0, 18);
+  if (usarFahrenheit) {
+    oled.print(dht.readTemperature(true), 1);
+    oled.println(" F");
+  } else {
+    oled.print(tempC, 1);
+    oled.println(" C");
+  }
+
+  // Humedad y estado de alerta
+  oled.setTextSize(1);
+  oled.setCursor(0, 42);
+  oled.print("Humedad: ");
+  oled.print(hum, 0);
+  oled.println("%");
+
+  oled.setCursor(0, 54);
+  if (tempC >= 30.0) {
+    oled.println("ALERTA: TEMP ALTA!");
+  } else {
+    oled.println("Estado: Normal");
+  }
+
+  oled.display(); //[cite: 7]
+  delay(100);
+}
